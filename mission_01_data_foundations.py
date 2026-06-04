@@ -17,10 +17,10 @@ End-to-end preprocessing pipeline that consolidates every step of the lesson:
    11. Print a profiling summary
 
 Run:
-    python mission_01_data_foundations.py          # headless: console + files only
-    python mission_01_data_foundations.py --viz    # also render the outputs
+    python mission_01_data_foundations.py            # console + files + one window per output
+    python mission_01_data_foundations.py --no-viz   # headless: console + files only
 
-In an IDE (e.g. Spyder), set VISUALIZE = True below and re-run.
+In an IDE (e.g. Spyder) the output windows open automatically (VISUALIZE = True below).
 
 Requirements:
     pip install numpy open3d scipy
@@ -48,7 +48,7 @@ K_NORMALS         = 20     # neighbors for normal estimation
 K_PLANARITY       = 15     # neighbors for planarity feature
 ORIENT_K          = 10     # k for orient_normals_consistent_tangent_plane
 
-VISUALIZE         = False     # opt-in: True (or pass --viz) to render outputs
+VISUALIZE         = True      # open a window per output by default; set False (or --no-viz) for headless
 CMAP_NAME         = "viridis" # colormap for the planarity-colored cloud / histogram
 
 
@@ -474,8 +474,12 @@ if __name__ == "__main__":
         description="Mission 01 — Data Foundations pipeline")
     parser.add_argument(
         "--viz", action="store_true",
-        help="render the outputs (cloud, mesh, voxels) and save a planarity histogram")
+        help="force-render outputs even if VISUALIZE is False")
+    parser.add_argument(
+        "--no-viz", action="store_true",
+        help="skip visualization (headless: console + files only)")
     # parse_known_args so IDE wrappers (e.g. Spyder's runfile --wdir) don't break parsing.
     args, _ = parser.parse_known_args()
 
-    run_pipeline(visualize=args.viz or VISUALIZE)
+    show_viz = (VISUALIZE or args.viz) and not args.no_viz
+    run_pipeline(visualize=show_viz)
