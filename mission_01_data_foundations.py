@@ -285,25 +285,33 @@ def save_foundation_ply(path: str | Path,
 # 10. Optional visualization of outputs
 # ============================================================================
 def visualize_outputs(results: dict, save_dir: str | Path = RESULTS_DIR) -> None:
-    """Render the pipeline outputs. Opt-in — headless batch runs skip this.
+    """Open one window per pipeline output. Opt-in — headless batch runs skip it.
 
-    Produces:
-      * a planarity histogram saved as PNG (and shown), then
-      * three Open3D windows in sequence (close each to advance):
-          1. full-resolution cloud colored by planarity
-          2. Ball-Pivoting mesh (shaded)
-          3. occupancy voxel grid
+    Saves a planarity histogram PNG, then opens a separate Open3D window for
+    each output in sequence (close each window to advance to the next):
+        1/5  Input point cloud (centered)
+        2/5  Surface normals (on the sampled cloud)
+        3/5  Ball-Pivoting mesh (shaded)
+        4/5  Occupancy voxel grid
+        5/5  Cloud colored by planarity
+    and finally shows the planarity histogram window.
     """
     # Lazy import so headless runs don't require matplotlib at all.
     import matplotlib.pyplot as plt
 
     save_dir  = Path(save_dir)
-    pc        = results["centered"]
+    centered  = results["centered"]
+    sampled   = results["sampled"]
+    normals   = results["normals"]
     planarity = results["planarity"]
     mesh      = results["mesh"]
     voxels    = results["voxel_grid"]
 
-    # ---- Planarity histogram (saved as PNG, then shown) ------------------
+    def _show(geoms, name, **kw):
+        print(f"[viz] {name}   (close window to continue)...")
+        o3d.visualization.draw_geometries(geoms, window_name=name, **kw)
+
+    # ---- Planarity histogram (saved as PNG, shown at the end) ------------
     save_dir.mkdir(parents=True, exist_ok=True)
     png_path = save_dir / "planarity_histogram.png"
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -316,25 +324,33 @@ def visualize_outputs(results: dict, save_dir: str | Path = RESULTS_DIR) -> None
     fig.savefig(png_path, dpi=150)
     print(f"[viz] Saved planarity histogram -> {png_path}")
 
-    # ---- 1. Planarity-colored cloud --------------------------------------
+    # ---- 1/5. Input point cloud (centered) -------------------------------
+    pcd_in = o3d.geometry.PointCloud()
+    pcd_in.points = o3d.utility.Vector3dVector(centered)
+    pcd_in.paint_uniform_color([0.6, 0.6, 0.6])
+    _show([pcd_in], "1/5  Input cloud (centered)")
+
+    # ---- 2/5. Surface normals (on the sampled cloud) ---------------------
+    pcd_n = o3d.geometry.PointCloud()
+    pcd_n.points  = o3d.utility.Vector3dVector(sampled)
+    pcd_n.normals = o3d.utility.Vector3dVector(normals)
+    _show([pcd_n], "2/5  Surface normals", point_show_normal=True)
+
+    # ---- 3/5. Mesh -------------------------------------------------------
+    _show([mesh], "3/5  Ball-Pivoting mesh", mesh_show_back_face=True)
+
+    # ---- 4/5. Voxel grid -------------------------------------------------
+    _show([voxels], "4/5  Voxel grid")
+
+    # ---- 5/5. Planarity-colored cloud ------------------------------------
     norm   = (planarity - planarity.min()) / (np.ptp(planarity) + 1e-8)
     colors = plt.get_cmap(CMAP_NAME)(norm)[:, :3]
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc)
-    pcd.colors = o3d.utility.Vector3dVector(colors)
-    print("[viz] Showing planarity-colored cloud (close window to continue)...")
-    o3d.visualization.draw_geometries([pcd], window_name="Planarity")
+    pcd_p = o3d.geometry.PointCloud()
+    pcd_p.points = o3d.utility.Vector3dVector(centered)
+    pcd_p.colors = o3d.utility.Vector3dVector(colors)
+    _show([pcd_p], "5/5  Planarity (viridis)")
 
-    # ---- 2. Mesh ---------------------------------------------------------
-    print("[viz] Showing reconstructed mesh (close window to continue)...")
-    o3d.visualization.draw_geometries(
-        [mesh], window_name="Ball-Pivoting Mesh", mesh_show_back_face=True)
-
-    # ---- 3. Voxel grid ---------------------------------------------------
-    print("[viz] Showing voxel grid (close window to continue)...")
-    o3d.visualization.draw_geometries([voxels], window_name="Voxel Grid")
-
-    # Show the histogram window last (blocks until closed).
+    # ---- Planarity histogram window (blocks until closed) ----------------
     plt.show()
     plt.close(fig)
 
