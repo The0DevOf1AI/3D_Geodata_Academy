@@ -40,7 +40,15 @@ from scipy.spatial import cKDTree
 # ============================================================================
 # Configuration
 # ============================================================================
-INPUT_PATH       = Path("../DATA/indoor_room_labeled.ply")
+# Real lesson scan — resolved relative to THIS script (not the working
+# directory) so it loads no matter where the file is launched from. The scan
+# lives in the SpatialOS lesson tree; if it's missing, load_pc() falls back
+# to a synthetic room.
+try:
+    _BASE_DIR = Path(__file__).resolve().parent.parent
+except NameError:                      # __file__ undefined (e.g. pasted into a console)
+    _BASE_DIR = Path.cwd().parent
+INPUT_PATH       = _BASE_DIR / "SpatialOS" / "01-data-foundations" / "DATA" / "indoor_room_labeled.ply"
 RESULTS_DIR      = Path("../RESULTS/mission_01")
 VOXEL_SIZE_SAMPLE = 0.05   # 5 cm — downsampling resolution
 VOXEL_SIZE_GRID   = 0.10   # 10 cm — voxel grid resolution
