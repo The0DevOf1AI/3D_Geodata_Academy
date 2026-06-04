@@ -16,6 +16,10 @@ import time
 from pathlib import Path
 from scipy.spatial import cKDTree
 
+# Collects per-step runtimes for the summary printed at the end.
+# (Run the whole file top-to-bottom — e.g. Spyder's runfile — so it accumulates.)
+timings = {}
+
 #%% 2. Data Loading & Centering
 
 def load_pc(path):
@@ -25,16 +29,20 @@ def load_pc(path):
 
 
 path_data = Path("../DATA/indoor_room_labeled.ply")
+_t = time.time()
 if path_data.exists():
     pc_raw = load_pc(path_data)
 else:
     pc_raw = np.random.rand(20000, 3) * 10
+timings["load"] = time.time() - _t
 
 # Center the point cloud to avoid high-magnitude coordinate issues.
 # Subtract the mean position from all points (lossless: add `center` back to
 # recover the originals; keep it for georeferencing exports).
+_t = time.time()
 center = pc_raw.mean(axis=0)
 pc_centered = pc_raw - center
+timings["center"] = time.time() - _t
 
 #%% 3. Pre-processing (Smart Voxel Sampling)
 
@@ -46,7 +54,9 @@ def voxel_sample(pts, voxel_size=0.05):
     return np.asarray(pcd_down.points)
 
 
+_t = time.time()
 pc_sampled = voxel_sample(pc_centered, 0.05)
+timings["sample"] = time.time() - _t
 
 #%% 4. Normal Estimation
 
@@ -62,7 +72,9 @@ def estimate_normals(pts, k=20):
     return pcd
 
 
+_t = time.time()
 pcd_sampled = estimate_normals(pc_sampled)
+timings["normals"] = time.time() - _t
 
 #%% 5. Mesh Reconstruction (Ball Pivoting)
 
@@ -82,7 +94,9 @@ def reconstruct_mesh(pcd):
     return mesh
 
 
+_t = time.time()
 mesh_recon = reconstruct_mesh(pcd_sampled)
+timings["mesh"] = time.time() - _t
 
 #%% 6. Voxelization
 
@@ -92,7 +106,9 @@ def voxelize(pcd, voxel_size=0.1):
     return v_grid
 
 
+_t = time.time()
 voxel_grid = voxelize(pcd_sampled, 0.1)
+timings["voxelize"] = time.time() - _t
 
 #%% 7. Geometric Feature Computation (Planarity)
 
@@ -118,7 +134,9 @@ def compute_planarity(pts, k=15):
     return planarity
 
 
+_t = time.time()
 planarity_features = compute_planarity(pc_sampled, k=15)
+timings["planarity"] = time.time() - _t
 
 #%% 8. Full-Scale Projection
 
@@ -131,9 +149,29 @@ def project_to_full(pts_full, pts_sampled, labels_sampled):
     return labels_sampled[idx]
 
 
+_t = time.time()
 full_planarity = project_to_full(pc_centered, pc_sampled, planarity_features)
+timings["project"] = time.time() - _t
 
-#%% 9. Visual Finalization
+#%% 9. Summary
+# Printed before the visualization below, because draw_geometries() blocks
+# until you close its window.
+
+print("=" * 52)
+print("MISSION 01: DATA FOUNDATIONS SUMMARY")
+print("=" * 52)
+print(f"Input points     : {len(pc_raw):,}")
+print(f"Sampled points   : {len(pc_sampled):,}")
+print(f"Mesh triangles   : {len(mesh_recon.triangles):,}")
+print(f"Occupied voxels  : {len(voxel_grid.get_voxels()):,}")
+print(f"Planarity range  : [{full_planarity.min():.3f}, {full_planarity.max():.3f}]")
+print("-" * 52)
+for step, duration in timings.items():
+    print(f"{step:<15}: {duration:8.4f} s")
+print(f"{'TOTAL':<15}: {sum(timings.values()):8.4f} s")
+print("=" * 52)
+
+#%% 10. Visual Finalization
 
 def viz_3d(points, scalars=None, title="Final View"):
     """Display points in 3D."""
